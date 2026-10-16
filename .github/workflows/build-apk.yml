@@ -1,4 +1,3 @@
-
 name: Compilar APK Renova tu mente sin conexión
 
 on:
@@ -19,36 +18,46 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Instalar componentes Android
-        run: |
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
-          if [ -z "$SDKMANAGER" ]; then
-            echo "No se encontró sdkmanager"
-            exit 1
-          fi
-          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Extraer proyecto actualizado
-        run: unzip -q renova_tu_mente_offline_biblia.zip
+      - name: Extraer proyecto
+        run: unzip -oq renova_tu_mente_offline_biblia.zip
 
-      - name: Verificar estructura del proyecto
+      - name: Generar Biblia local completa
         run: |
-          test -d renova || {
-            echo "ERROR: no se encontró la carpeta renova dentro del ZIP"
-            unzip -l renova_tu_mente_offline_biblia.zip | head -n 40
-            exit 1
-          }
+          cd renova
+          python3 tools/prepare_bible.py
+          test -s app/src/main/assets/bible-data.js
+          grep -q 'window.RTM_BIBLE=' app/src/main/assets/bible-data.js
+          echo "Archivo bíblico generado correctamente."
+          ls -lh app/src/main/assets/bible-data.js
 
       - name: Compilar APK
         run: |
           cd renova
           gradle assembleDebug
+
+      - name: Verificar que la APK contiene la Biblia
+        run: |
+          cd renova
+          python3 - <<'PY'
+          import glob, zipfile, sys
+          apks = glob.glob("app/build/outputs/apk/debug/*.apk")
+          if not apks:
+              sys.exit("ERROR: no se generó la APK")
+          with zipfile.ZipFile(apks[0]) as apk:
+              names = apk.namelist()
+              matches = [n for n in names if n.endswith("assets/bible-data.js")]
+              if not matches:
+                  sys.exit("ERROR: la APK no contiene bible-data.js")
+              data = apk.read(matches[0])
+              if b"window.RTM_BIBLE=" not in data or len(data) < 100000:
+                  sys.exit("ERROR: el archivo bíblico está vacío o incompleto")
+              print("Correcto: la APK contiene el recurso bíblico local.")
+          PY
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
@@ -56,3 +65,4 @@ jobs:
           name: Renova-tu-mente-APK-sin-conexion
           path: renova/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+```
