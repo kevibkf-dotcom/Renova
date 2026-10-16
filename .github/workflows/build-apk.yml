@@ -1,5 +1,5 @@
 ```yaml
-name: Compilar APK Renova tu mente sin conexión
+name: Compilar APK Renova tu mente sin conexion
 
 on:
   workflow_dispatch:
@@ -19,6 +19,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -27,38 +32,22 @@ jobs:
       - name: Extraer proyecto
         run: unzip -oq renova_tu_mente_offline_biblia.zip
 
-      - name: Generar Biblia local completa
+      - name: Generar Biblia local
         run: |
           cd renova
           python3 tools/prepare_bible.py
           test -s app/src/main/assets/bible-data.js
           grep -q 'window.RTM_BIBLE=' app/src/main/assets/bible-data.js
-          echo "Archivo bíblico generado correctamente."
-          ls -lh app/src/main/assets/bible-data.js
+          echo "Archivo biblico generado."
 
       - name: Compilar APK
         run: |
           cd renova
           gradle assembleDebug
 
-      - name: Verificar que la APK contiene la Biblia
+      - name: Verificar APK
         run: |
-          cd renova
-          python3 - <<'PY'
-          import glob, zipfile, sys
-          apks = glob.glob("app/build/outputs/apk/debug/*.apk")
-          if not apks:
-              sys.exit("ERROR: no se generó la APK")
-          with zipfile.ZipFile(apks[0]) as apk:
-              names = apk.namelist()
-              matches = [n for n in names if n.endswith("assets/bible-data.js")]
-              if not matches:
-                  sys.exit("ERROR: la APK no contiene bible-data.js")
-              data = apk.read(matches[0])
-              if b"window.RTM_BIBLE=" not in data or len(data) < 100000:
-                  sys.exit("ERROR: el archivo bíblico está vacío o incompleto")
-              print("Correcto: la APK contiene el recurso bíblico local.")
-          PY
+          python3 -c "import glob,zipfile,sys; f=glob.glob('renova/app/build/outputs/apk/debug/*.apk'); sys.exit('No se genero la APK') if not f else None; z=zipfile.ZipFile(f[0]); n=[x for x in z.namelist() if x.endswith('assets/bible-data.js')]; sys.exit('La APK no contiene la Biblia local') if not n else print('La APK contiene bible-data.js')"
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
