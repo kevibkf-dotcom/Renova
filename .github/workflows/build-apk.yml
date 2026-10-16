@@ -1,4 +1,4 @@
-```yaml
+
 name: Compilar APK Renova tu mente sin conexion
 
 on:
@@ -55,4 +55,3 @@ jobs:
           name: Renova-tu-mente-APK-sin-conexion
           path: renova/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-```
