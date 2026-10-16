@@ -1,0 +1,58 @@
+
+name: Compilar APK Renova tu mente sin conexión
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar proyecto
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar componentes Android
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "No se encontró sdkmanager"
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Extraer proyecto actualizado
+        run: unzip -q renova_tu_mente_offline_biblia.zip
+
+      - name: Verificar estructura del proyecto
+        run: |
+          test -d renova || {
+            echo "ERROR: no se encontró la carpeta renova dentro del ZIP"
+            unzip -l renova_tu_mente_offline_biblia.zip | head -n 40
+            exit 1
+          }
+
+      - name: Compilar APK
+        run: |
+          cd renova
+          gradle assembleDebug
+
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Renova-tu-mente-APK-sin-conexion
+          path: renova/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
